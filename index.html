@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.11.7/video-js.min.css" rel="stylesheet" />
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.11.7/video.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-eme@3.8.0/dist/videojs-contrib-eme.js"></script>
+
+  <title>Test VideJS DRM</title>
+  <style>
+    #custom-video-player {
+      position: relative;
+      width: 640px;
+      margin: 20px auto;
+    }
+
+    #custom-seekbar:hover {
+      width: 100%;
+      height: 8px;
+      background-color: #33333399;
+      cursor: pointer;
+    }
+
+    #segment-wrapper {
+      flex-direction: row;
+      display: flex;
+      padding: 0px 1px;
+      background-color: black;
+      gap: 2px;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .segment-card {
+      display: none;
+      position: absolute;
+      bottom: 0px;
+      opacity: 1;
+      bottom: 8px;
+      padding-bottom: 10px;
+    }
+
+    .image-wrapper {
+      height: 70px;
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .image {
+      border: #ffffff5f solid 2px;
+      border-radius: 15px;
+      height: 100%;
+    }
+
+    .title {
+      text-align: center;
+      display: block;
+      margin-top: 7px;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    .segment-section {
+      opacity: 0.8;
+      height: 100%;
+      background-color: #354cff;
+    }
+
+    .video-js .vjs-play-progress:before {
+      z-index: 3;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="custom-video-player">
+    <video id="my-video" class="video-js"></video>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var player = videojs(
+        'my-video',
+        {
+          controls: true,
+          fluid: true,
+          html5: {
+            vhs: {
+              overrideNative: true,
+            },
+          },
+        },
+        function () {
+          var player = this;
+          player.eme();
+          player.src({
+            src: 'https://cdn.bitmovin.com/content/assets/art-of-motion_drm/mpds/11331.mpd',
+            type: 'application/dash+xml',
+            keySystems: {
+              'com.widevine.alpha':
+                'https://cwip-shaka-proxy.appspot.com/no_auth',
+            },
+          });
+
+          player.ready(function () {
+            player.tech(true).on('keystatuschange', function (event) {
+              // console.log('event: ', event);
+            });
+          });
+        },
+      );
+
+      var tooltip = document.getElementById('custom-tooltip');
+
+      // segments currently last segment should cover max video length
+      var segments = [
+        { id: 1, start: 0, end: 30, thumbnail: 'https://www.cameraegg.org/wp-content/uploads/2016/01/Nikon-D500-Sample-Images-2.jpg', description: 'Segment 1' },
+        { id: 2, start: 30, end: 80, thumbnail: 'https://www.cameraegg.org/wp-content/uploads/2016/01/Nikon-D500-Sample-Images-2.jpg', description: 'Segment 2' },
+        { id: 3, start: 80, end: 210, thumbnail: 'https://www.cameraegg.org/wp-content/uploads/2016/01/Nikon-D500-Sample-Images-2.jpg', description: 'Segment 3' },
+
+        // Add more segments as needed
+      ];
+
+      // taking default progress control to customise it
+      var customSeekbar = player.controlBar.progressControl.seekBar.el()
+      customSeekbar.id = "custom-seekbar"
+
+      // scroll to clicked segment
+      function scrollToSegment(e) {
+        e.stopPropagation()
+        var wrapperDiv = e.target.closest('.segment-section')
+        if (wrapperDiv) {
+          var startTime = Number(wrapperDiv.getAttribute('data-segmentstart'))
+          player.currentTime(startTime)
+        }
+      }
+
+      function generateCard(segmentDetails) {
+        var card = document.createElement('div')
+        card.id = `segment-card-${segmentDetails.id}`
+        card.classList.add('segment-card')
+
+        var imageWrapper = document.createElement('div')
+        imageWrapper.classList.add('image-wrapper')
+
+        var thumbnail = document.createElement('img')
+        thumbnail.classList.add('image')
+        thumbnail.src = segmentDetails.thumbnail
+        thumbnail.alt = segmentDetails.description
+
+        imageWrapper.appendChild(thumbnail)
+
+        var title = document.createElement('span')
+        title.innerText = segmentDetails.description
+        title.classList.add('title')
+
+        card.appendChild(imageWrapper)
+        card.appendChild(title)
+        card.addEventListener('click', scrollToSegment)
+        return card
+      }
+
+
+      // showing segments only when progress bar is hovered
+      customSeekbar.addEventListener('mouseenter', function () {
+        var segmentWrapper = document.createElement('div')
+        segmentWrapper.id = "segment-wrapper"
+
+        // looping over segments array to create track segments
+        segments.forEach((e) => {
+          var segment = document.createElement('div');
+
+          segment.style.width = (((e.end - e.start) / player.duration()) * 100) + "%"
+
+          segment.id = `segment-section-${e.id}`
+          segment.classList.add('segment-section')
+          segment.setAttribute('data-segmentstart', e.start)
+
+          //generating custom card for segment
+          var card = generateCard(e)
+          segment.append(card)
+
+          // display card only if current segment is hovered
+          segment.addEventListener('mouseenter', (e) => {
+            e.target.style.opacity = "1"
+            const id = e.target.getAttribute('id').split("-")[2]
+            const card = document.querySelector(`#segment-card-${id}`)
+            card.style.display = 'block'
+          })
+
+          // removing card for current segment on mouseleave
+          segment.addEventListener('mouseleave', (e) => {
+            e.target.style.opacity = '0.8'
+            const id = e.target.getAttribute('id').split("-")[2]
+            const card = document.querySelector(`#segment-card-${id}`)
+            card.style.display = 'none'
+          })
+
+          // adding segment to segment wrapper
+          segmentWrapper.appendChild(segment)
+        })
+
+        //adding segemnt wrapper to progress bar
+        customSeekbar.appendChild(segmentWrapper)
+      });
+
+      customSeekbar.addEventListener('mouseleave', function () {
+        // removing segment from dom
+        var segmentWrapper = document.getElementById('segment-wrapper')
+        if (segmentWrapper) {
+          customSeekbar.removeChild(segmentWrapper)
+        }
+      });
+
+      // listening for segement currentTime
+      customSeekbar.addEventListener('click', function (event) {
+        var boundingRect = customSeekbar.getBoundingClientRect();
+        var clickX = event.clientX - boundingRect.left;
+        var percentage = clickX / boundingRect.width;
+        var seekTime = percentage * player.duration();
+        player.currentTime(seekTime)
+      });
+
+
+    })
+
+  </script>
+</body>
+
+</html>
