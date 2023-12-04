@@ -1,4 +1,3 @@
-Certainly! Below is a sample README for the provided HTML code:
 
 ---
 
